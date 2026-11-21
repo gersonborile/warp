@@ -1,0 +1,76 @@
+# Personal fork: builds the Warp OSS channel (warp-oss) installer for Windows x64 on a
+# free GitHub-hosted runner and uploads it as a workflow artifact.
+name: Personal - Build Windows (OSS)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: personal-build-windows
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build warp-oss (Windows x64)
+    runs-on: windows-latest
+    timeout-minutes: 360
+    steps:
+      - name: Show runner resources
+        shell: pwsh
+        run: |
+          Get-PSDrive -PSProvider FileSystem | Format-Table Name, @{n='FreeGB';e={[math]::Round($_.Free/1GB,1)}}, @{n='UsedGB';e={[math]::Round($_.Used/1GB,1)}}
+          "CPUs: $env:NUMBER_OF_PROCESSORS"
+          "RAM GB: " + [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB,1)
+          "Workspace: $env:GITHUB_WORKSPACE"
+
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - uses: ./.github/actions/prepare_environment
+        with:
+          target_os: windows
+          is_self_hosted: false
+          install_release_deps: true
+
+      - name: Ensure Inno Setup is available
+        shell: pwsh
+        run: |
+          if (Get-Command ISCC -ErrorAction SilentlyContinue) {
+            "ISCC found at $((Get-Command ISCC).Source)"
+            exit 0
+          }
+          $dir = "${env:ProgramFiles(x86)}\Inno Setup 6"
+          if (-not (Test-Path "$dir\ISCC.exe")) {
+            choco install innosetup -y --no-progress
+          }
+          "$dir" >> $env:GITHUB_PATH
+
+      - name: Compute version tag
+        id: version
+        shell: bash
+        run: echo "tag=v0.$(date -u +%Y.%m.%d.%H.%M).oss_00" >> "$GITHUB_OUTPUT"
+
+      - name: Build warp-oss and installer
+        id: bundle
+        shell: bash
+        run: script/bundle --artifact app --channel oss --arch x64
+        env:
+          GIT_RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Show disk usage after build
+        if: ${{ always() }}
+        shell: pwsh
+        run: |
+          Get-PSDrive -PSProvider FileSystem | Format-Table Name, @{n='FreeGB';e={[math]::Round($_.Free/1GB,1)}}, @{n='UsedGB';e={[math]::Round($_.Used/1GB,1)}}
+          if (Test-Path target) { "target GB: " + [math]::Round(((Get-ChildItem target -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum)/1GB,1) }
+
+      - name: Upload installer
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: warp-oss-windows-x64-${{ steps.version.outputs.tag }}
+          path: ${{ steps.bundle.outputs.installer_path }}
+          if-no-files-found: error
+          retention-days: 30
