@@ -429,6 +429,7 @@ impl<S> TerminalManager<S> {
             )
         });
 
+        log::info!("Explicitly chosen shell for new session: {chosen_shell:?}");
         let preferred_shell = chosen_shell.unwrap_or_else(|| {
             AvailableShells::handle(ctx)
                 .read(ctx, |shells, ctx| shells.get_user_preferred_shell(ctx))

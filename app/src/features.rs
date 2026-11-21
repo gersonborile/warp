@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use warp_core::channel::ChannelState;
+use warp_core::channel::{Channel, ChannelState};
 pub use warp_core::features::*;
 
 /// Mark all features which should be enabled on the current channel as enabled.
@@ -548,6 +548,13 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         #[cfg(feature = "acp_harness")]
         FeatureFlag::AcpHarness,
     ]);
+
+    // OSS builds can't autoupdate and have no changelog, so skip the server round-trips that
+    // these flags trigger at startup.
+    if ChannelState::channel() == Channel::Oss {
+        flags.remove(&FeatureFlag::Autoupdate);
+        flags.remove(&FeatureFlag::Changelog);
+    }
 
     flags
 }

@@ -589,6 +589,10 @@ impl AvailableShells {
     /// shell object.
     pub fn get_user_preferred_shell(&self, ctx: &AppContext) -> AvailableShell {
         let preference = self.get_user_preferred_shell_setting(ctx);
+        log::info!(
+            "Resolving preferred shell {preference:?} against known shells: {:?}",
+            self.shells
+        );
 
         match preference {
             NewSessionShell::SystemDefault => AvailableShell::default(),

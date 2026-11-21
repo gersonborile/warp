@@ -205,6 +205,10 @@ if ($IS_TUI) {
     $BINARY_NAME = "$WARP_BIN.exe"
     $FEATURES = (($FEATURES -split ',') | Where-Object { $_ -ne 'gui' }) -join ','
     $FEATURES = "$FEATURES,standalone"
+} elseif ("$CHANNEL" -eq 'oss') {
+    # The OSS build skips the ONNX classifier: loading the model at startup only serves AI input
+    # detection, and the heuristic classifier covers command-vs-natural-language detection.
+    $FEATURES = "$FEATURES,nld_heuristic_v2"
 } else {
     # All app channels ship the v3 classifier and v2 heuristic.
     $FEATURES = "$FEATURES,nld_classifier_v3,nld_heuristic_v2"

@@ -13,6 +13,11 @@ use crate::channel::{Channel, ChannelState};
 use crate::server::server_api::ServerApi;
 
 pub async fn get_current_changelog(server_api: Arc<ServerApi>) -> Result<Option<Changelog>> {
+    // The OSS channel has no changelog, so don't spend a server round-trip discovering that.
+    if ChannelState::channel() == Channel::Oss {
+        return Ok(None);
+    }
+
     let rand: String = {
         let mut rng = thread_rng();
         iter::repeat(())
