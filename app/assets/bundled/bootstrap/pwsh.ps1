@@ -325,6 +325,56 @@ $null = New-Module -Name Warp-Module -ScriptBlock {
     #    an escape sequence '^[i'. Since it made it more convenient to have a wrapper
     #    function anyway, I have not investigated this, but in case someone is working
     #    on this in the future, beware attempting to inline this function.
+    # Returns the current git HEAD as (head, branch), like `git symbolic-ref --short HEAD` falling
+    # back to `git rev-parse --short HEAD`, by reading the repository's HEAD file. Process launches
+    # are slow on Windows, so this keeps the per-prompt cost to a few file reads. Based on
+    # dxmachina/warp-nine's equivalent change to the zsh integration.
+    function Warp-Read-GitHead {
+        try {
+            if ($PWD.Provider.Name -ne 'FileSystem') {
+                return '', ''
+            }
+            $gitDir = $null
+            if ($env:GIT_DIR) {
+                $gitDir = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($PWD.ProviderPath, $env:GIT_DIR))
+            } else {
+                $dir = $PWD.ProviderPath
+                while ($dir) {
+                    $candidate = [System.IO.Path]::Combine($dir, '.git')
+                    if ([System.IO.Directory]::Exists($candidate)) {
+                        $gitDir = $candidate
+                        break
+                    }
+                    if ([System.IO.File]::Exists($candidate)) {
+                        # Worktrees and submodules use a '.git' file pointing at the real git dir.
+                        $pointer = [System.IO.File]::ReadAllText($candidate).Trim()
+                        if ($pointer.StartsWith('gitdir:')) {
+                            $gitDir = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($dir, $pointer.Substring(7).Trim()))
+                        }
+                        break
+                    }
+                    $dir = [System.IO.Path]::GetDirectoryName($dir)
+                }
+            }
+            if ($gitDir) {
+                $headFile = [System.IO.Path]::Combine($gitDir, 'HEAD')
+                if ([System.IO.File]::Exists($headFile)) {
+                    $head = [System.IO.File]::ReadAllText($headFile).Trim()
+                    if ($head.StartsWith('ref: refs/heads/')) {
+                        $branch = $head.Substring(16)
+                        return $branch, $branch
+                    }
+                    if ($head -match '^[0-9a-f]{7,}$') {
+                        return $head.Substring(0, 7), ''
+                    }
+                }
+            }
+        } catch {
+            Write-Verbose "Failed to read git HEAD: $($_.Exception.Message)"
+        }
+        return '', ''
+    }
+
     function Warp-Git {
         $GIT_OPTIONAL_LOCKS = $env:GIT_OPTIONAL_LOCKS
         $env:GIT_OPTIONAL_LOCKS = 0
@@ -544,11 +594,18 @@ $null = New-Module -Name Warp-Module -ScriptBlock {
                 # current location + PATH so we only spawn node when the directory or PATH
                 # changes (PATH changes on version-manager switches like `nvm use`).
                 $nodeChipEnabled = "$env:WARP_PROMPT_NODE_VERSION_ENABLED" -ne '0'
-                $hasNodeCommand = if ($nodeChipEnabled) { Get-Command -CommandType Application node 2>$null } else { $null }
+                # The PATH lookup for node is only redone when the cache key changes, instead of on
+                # every prompt.
+                $nodeCacheKey = "$($PWD.Path)|$env:PATH"
+                $nodeCacheHit = $nodeCacheKey -eq $script:warpNodeVersionCacheKey
+                $hasNodeCommand = if (-not $nodeChipEnabled) { $null } elseif ($nodeCacheHit) { $true } else { Get-Command -CommandType Application node 2>$null }
+                if ($nodeChipEnabled -and -not $nodeCacheHit -and -not $hasNodeCommand) {
+                    $script:warpNodeVersionCacheKey = $nodeCacheKey
+                    $script:warpNodeVersionCacheValue = ''
+                }
                 if ($hasNodeCommand) {
                     try {
-                        $nodeCacheKey = "$($PWD.Path)|$env:PATH"
-                        if ($nodeCacheKey -eq $script:warpNodeVersionCacheKey) {
+                        if ($nodeCacheHit) {
                             $nodeVersion = $script:warpNodeVersionCacheValue
                         } else {
                             # Walk up from the current directory to find a package.json
@@ -591,24 +648,9 @@ $null = New-Module -Name Warp-Module -ScriptBlock {
                     }
                 }
 
-                # We do not inline $hasGitCommand b/c the linter does not like seeing '>'
-                # in an if statement; it thinks we are trying to do -gt incorrectly.
-                # Since this is a good warning and we do not want to turn off this lint rule,
-                # we do a little indirection here
-                $hasGitCommand = Get-Command -CommandType Application git 2>$null
-                if ($hasGitCommand) {
-                    # This is deliberately not using || b/c || only works in Powershell >=7
-                    $gitBranchTmp = Warp-Git symbolic-ref --short HEAD 2>$null
-                    if ($null -ne $gitBranchTmp) {
-                        $gitBranch = $gitBranchTmp
-                        $gitHead = $gitBranchTmp
-                    } else {
-                        $gitHeadTmp = Warp-Git rev-parse --short HEAD 2>$null
-                        if ($null -ne $gitHeadTmp) {
-                            $gitHead = $gitHeadTmp
-                        }
-                    }
-                }
+                # Read the branch straight from the repository instead of searching PATH for git
+                # and launching it once or twice on every prompt.
+                $gitHead, $gitBranch = Warp-Read-GitHead
             }
 
             $honor_ps1 = "$env:WARP_HONOR_PS1" -eq '1'

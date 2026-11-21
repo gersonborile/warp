@@ -624,7 +624,10 @@ impl LaunchMode {
     /// CLI, proxy, TUI) would otherwise contend for the fixed port.
     #[cfg_attr(target_family = "wasm", allow(dead_code))]
     fn should_start_local_http_server(&self) -> bool {
-        self.is_gui()
+        // Personal fork: in the OSS build the server only serves warp.dev's install detection,
+        // which nothing here needs, so don't bind a port for it on every launch.
+        // From dxmachina/warp-nine@3354f48a9.
+        self.is_gui() && ChannelState::channel() != warp_core::channel::Channel::Oss
     }
 
     /// Returns `true` if this process can build and sync codebase indices.
