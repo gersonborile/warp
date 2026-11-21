@@ -33,6 +33,9 @@ jobs:
           target_os: windows
           is_self_hosted: false
           install_release_deps: true
+          # rust-cache never re-saves on an exact key hit, so the key must change whenever the
+          # cargo profile does or the new profile's dependency artifacts are never cached.
+          cache_key: windows-rfast
 
       - name: Ensure Inno Setup is available
         shell: pwsh
