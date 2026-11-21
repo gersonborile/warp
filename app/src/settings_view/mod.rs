@@ -104,6 +104,7 @@ mod main_page;
 pub mod mcp_servers;
 pub mod mcp_servers_page;
 mod nav;
+pub(crate) mod oss_hidden_ai;
 pub mod pane_manager;
 mod platform;
 mod platform_page;
@@ -1455,6 +1456,29 @@ impl SettingsView {
                 shared_blocks_index,
                 SettingsNavItem::Page(SettingsSection::Scripting),
             );
+        }
+
+        if oss_hidden_ai::hide_warp_ai() {
+            nav_items = nav_items
+                .into_iter()
+                .filter_map(|item| match item {
+                    SettingsNavItem::Page(section) => (!oss_hidden_ai::is_hidden_section(section))
+                        .then_some(SettingsNavItem::Page(section)),
+                    SettingsNavItem::Umbrella(umbrella) => {
+                        let subpages: Vec<_> = umbrella
+                            .subpages
+                            .into_iter()
+                            .filter(|section| !oss_hidden_ai::is_hidden_section(*section))
+                            .collect();
+                        (!subpages.is_empty()).then(|| {
+                            SettingsNavItem::Umbrella(SettingsUmbrella::new(
+                                umbrella.label,
+                                subpages,
+                            ))
+                        })
+                    }
+                })
+                .collect();
         }
 
         let initial_page = match page {

@@ -21127,7 +21127,11 @@ impl Workspace {
                         Shrinkable::new(
                             1.,
                             Text::new_inline(
-                                "Search sessions, agents, files...",
+                                if crate::settings_view::oss_hidden_ai::hide_warp_ai() {
+                                    "Search sessions, files..."
+                                } else {
+                                    "Search sessions, agents, files..."
+                                },
                                 appearance.ui_font_family(),
                                 14.,
                             )

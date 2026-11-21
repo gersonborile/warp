@@ -83,12 +83,40 @@ impl CommandBindingDataSource {
             .into_iter()
             .filter_map(|lens| CommandBinding::from_lens(lens, ctx))
             .filter(|binding| binding_filter_fn.as_ref().is_none_or(|f| f(binding)))
+            .filter(|binding| !is_hidden_warp_ai_binding(binding))
             .map(Arc::new)
             .map(|binding| (binding.id, binding))
             .collect();
 
         self.searcher.build_index();
         ctx.emit(Event::IndexUpdated);
+    }
+}
+
+/// Personal fork: drops Warp's built-in AI actions from the command palette in OSS builds.
+fn is_hidden_warp_ai_binding(binding: &CommandBinding) -> bool {
+    use crate::settings_view::oss_hidden_ai;
+    use crate::util::bindings::BindingGroup;
+    use crate::workspace::WorkspaceAction;
+
+    if !oss_hidden_ai::hide_warp_ai() {
+        return false;
+    }
+    if matches!(binding.group, Some(BindingGroup::WarpAi)) {
+        return true;
+    }
+    match binding
+        .action
+        .as_ref()
+        .and_then(|action| action.as_any().downcast_ref::<WorkspaceAction>())
+    {
+        Some(WorkspaceAction::DispatchToSettingsTab(action)) => {
+            oss_hidden_ai::is_hidden_settings_action(action)
+        }
+        Some(WorkspaceAction::ShowSettingsPage(section)) => {
+            oss_hidden_ai::is_hidden_section(*section)
+        }
+        _ => false,
     }
 }
 
