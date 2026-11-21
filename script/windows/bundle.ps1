@@ -118,6 +118,10 @@ if ($DEBUG_BUILD) {
     # catch violations that would otherwise silently pass in
     # a normal release build (e.g. in stable).
     $CARGO_PROFILE = 'rltoda'
+} elseif ("$CHANNEL" -eq 'oss') {
+    # The personal OSS build favors build time on free CI runners over the last few percent of
+    # runtime performance that thin LTO buys.
+    $CARGO_PROFILE = 'rfast'
 } else {
     $CARGO_PROFILE = 'rlto'
 }

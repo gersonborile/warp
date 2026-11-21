@@ -489,6 +489,12 @@ miniz_oxide.opt-level = 3
 inherits = "release"
 lto = "thin"
 
+# Release build without LTO or debuginfo, used for the personal OSS bundle to keep CI builds on
+# free runners short. Short name for the same Windows path-length reason as `rlto`.
+[profile.rfast]
+inherits = "release"
+debug = 0
+
 # A shorthand profile for `release-lto`.
 # Windows enforces that any path is a maximum of 255 characters and
 # the length of this profile is sufficiently long that it can cause
