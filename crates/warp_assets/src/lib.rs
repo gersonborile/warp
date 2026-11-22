@@ -15,6 +15,8 @@ use warpui_core::AssetProvider;
 // embedded asset set to keep the CLI binary small — mirroring the carve-out
 // already applied for the WASM target above.
 #[cfg_attr(feature = "standalone", exclude = "async/**")]
+// Personal fork: the OSS build leaves out the onboarding and promo screenshots (~50 MB).
+#[cfg_attr(feature = "slim_assets", exclude = "async/png/**")]
 pub struct Assets;
 
 impl AssetProvider for Assets {

@@ -8,6 +8,9 @@ publish.workspace = true
 
 [features]
 standalone = []
+# Leaves the onboarding and promo PNGs in `async/png` out of the binary (~50 MB). Missing
+# images simply fail to load. Used by the personal OSS build.
+slim_assets = []
 
 [dependencies]
 anyhow.workspace = true

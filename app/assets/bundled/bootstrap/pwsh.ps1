@@ -693,7 +693,8 @@ $null = New-Module -Name Warp-Module -ScriptBlock {
     $script:innerRunspacePool = [runspacefactory]::CreateRunspacePool(10, 20)
     $script:innerRunspacePool.ApartmentState = [System.Threading.ApartmentState]::STA
     $script:innerRunspacePool.ThreadOptions = 'ReuseThread'
-    $script:innerRunspacePool.Open() | Out-Null
+    # Opened in the background so the bootstrap doesn't wait for it; see Warp-Wait-RunspacePools.
+    $script:innerRunspacePoolOpening = $script:innerRunspacePool.BeginOpen($null, $null)
 
     # The outer runspace pool maintains a pool of runspaces that
     # share the same host as the user's session. This allows them
@@ -705,7 +706,20 @@ $null = New-Module -Name Warp-Module -ScriptBlock {
     $script:outerRunspacePool = [runspacefactory]::CreateRunspacePool(5, 10, $Host)
     $script:outerRunspacePool.ApartmentState = [System.Threading.ApartmentState]::STA
     $script:outerRunspacePool.ThreadOptions = 'ReuseThread'
-    $script:outerRunspacePool.Open() | Out-Null
+    $script:outerRunspacePoolOpening = $script:outerRunspacePool.BeginOpen($null, $null)
+
+    # Waits for the runspace pools started above to finish opening. They open in the background
+    # during the bootstrap; the first generator command is the first thing that needs them.
+    function Warp-Wait-RunspacePools {
+        if ($null -ne $script:innerRunspacePoolOpening) {
+            $script:innerRunspacePool.EndOpen($script:innerRunspacePoolOpening)
+            $script:innerRunspacePoolOpening = $null
+        }
+        if ($null -ne $script:outerRunspacePoolOpening) {
+            $script:outerRunspacePool.EndOpen($script:outerRunspacePoolOpening)
+            $script:outerRunspacePoolOpening = $null
+        }
+    }
 
     class WarpGeneratorCommand {
         [string]$CommandId
@@ -716,6 +730,8 @@ $null = New-Module -Name Warp-Module -ScriptBlock {
         param(
             [WarpGeneratorCommand[]]$commands
         )
+
+        Warp-Wait-RunspacePools
 
         $jobNumber = $script:inBandCommandCount++
 
