@@ -530,7 +530,7 @@ use crate::terminal::{
     terminal_size_element::TerminalSizeElement,
 };
 use crate::themes::theme::WarpTheme;
-use crate::throttle::throttle_quick_after_quiet;
+use crate::throttle::{throttle, throttle_quick_after_quiet};
 use crate::ui_components::icons::{self};
 use crate::util::bindings::{
     CustomAction, custom_tag_to_keystroke, keybinding_name_to_display_string,
